@@ -1,0 +1,106 @@
+{{define "session_content"}}
+<div class="h-full flex flex-col">
+    <!-- Session Header -->
+    {{with .Session}}
+    <div class="flex-none border-b border-border/50 px-6 py-4">
+        <div class="flex items-center gap-6">
+            <a href="/sessions" class="text-gray-600 hover:text-antenna-cyan transition-colors text-xs uppercase tracking-widest">← Back</a>
+            
+            <div class="w-px h-6 bg-border"></div>
+            
+            <div class="flex items-center gap-3">
+                {{if eq .TypeColor "cyan"}}
+                <span class="w-2 h-2 rounded-full bg-antenna-cyan"></span>
+                {{else if eq .TypeColor "purple"}}
+                <span class="w-2 h-2 rounded-full bg-antenna-purple"></span>
+                {{else if eq .TypeColor "orange"}}
+                <span class="w-2 h-2 rounded-full bg-antenna-orange"></span>
+                {{end}}
+                
+                <div>
+                    <div class="text-lg font-bold text-white">{{if .Name}}{{.Name}}{{else}}{{truncate .SessionID 12}}{{end}}</div>
+                    <div class="text-[10px] text-gray-700 font-mono">{{.SessionID}}</div>
+                </div>
+            </div>
+            
+            {{if .Model}}
+            <span class="text-[10px] text-gray-600 bg-surface px-3 py-1 rounded">{{.Model}}</span>
+            {{end}}
+            
+            <div class="flex-1"></div>
+            
+            <div class="flex items-center gap-6 text-sm">
+                <div class="text-center">
+                    <div class="text-xs text-gray-600 uppercase tracking-widest">Msgs</div>
+                    <div class="text-lg font-bold text-gray-400">{{.MessageCount}}</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-xs text-gray-600 uppercase tracking-widest">Tokens</div>
+                    <div class="text-lg font-bold text-gray-400">{{.TotalTokens}}</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-xs text-gray-600 uppercase tracking-widest">Cost</div>
+                    <div class="text-lg font-bold text-antenna-cyan glow-cyan">{{formatCost .TotalCost}}</div>
+                </div>
+            </div>
+        </div>
+        {{if .CWD}}
+        <div class="mt-2 text-[10px] text-gray-700 font-mono">{{.CWD}}</div>
+        {{end}}
+    </div>
+    {{end}}
+
+    <!-- Messages -->
+    <div class="flex-1 overflow-y-auto scrollbar-thin bg-void">
+        <div class="max-w-4xl mx-auto py-6 px-6 space-y-3">
+            {{range .Messages}}
+            <div class="{{if eq .Role "user"}}border-l-2 border-antenna-cyan border-glow-cyan{{else if .IsError}}border-l-2 border-antenna-red{{else}}border-l-2 border-gray-800{{end}} bg-panel/50">
+                <!-- Message Header -->
+                <div class="flex items-center justify-between px-4 py-2 border-b border-border/30">
+                    <div class="flex items-center gap-3">
+                        {{if eq .Role "user"}}
+                        <span class="text-[10px] font-bold text-antenna-cyan uppercase tracking-widest">User</span>
+                        {{else if eq .Role "assistant"}}
+                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Assistant</span>
+                        {{else}}
+                        <span class="text-[10px] font-bold text-gray-600 uppercase tracking-widest">{{.Role}}</span>
+                        {{end}}
+                        
+                        {{if .IsError}}
+                        <span class="text-[10px] font-bold text-antenna-red bg-antenna-red/10 px-2 py-0.5 rounded">ERROR</span>
+                        {{end}}
+                        
+                        {{if .HasThinking}}<span class="text-[10px] text-gray-600">💭</span>{{end}}
+                        
+                        {{range .ToolCalls}}
+                        <span class="text-[10px] text-gray-600 bg-surface px-2 py-0.5 rounded font-mono">{{.}}</span>
+                        {{end}}
+                    </div>
+                    
+                    <div class="flex items-center gap-4 text-[10px] text-gray-700">
+                        {{if .Tokens}}<span>{{.Tokens}} tok</span>{{end}}
+                        {{if .Cost}}<span class="text-antenna-cyan">{{formatCost .Cost}}</span>{{end}}
+                        {{if not .Time.IsZero}}<span>{{.Time.Format "15:04:05"}}</span>{{end}}
+                    </div>
+                </div>
+                
+                <!-- Message Content -->
+                <div class="px-4 py-3">
+                    {{if .IsError}}
+                    <div class="text-xs text-antenna-red font-mono whitespace-pre-wrap">{{.ErrorMsg}}</div>
+                    {{else if .Content}}
+                    <div class="text-sm text-gray-400 whitespace-pre-wrap leading-relaxed">{{.Content}}</div>
+                    {{else if .ToolCalls}}
+                    <div class="text-[10px] text-gray-700 italic">Tool calls only</div>
+                    {{else}}
+                    <div class="text-[10px] text-gray-700 italic">Empty message</div>
+                    {{end}}
+                </div>
+            </div>
+            {{else}}
+            <div class="text-center text-gray-700 py-16 text-sm">No messages in transcript</div>
+            {{end}}
+        </div>
+    </div>
+</div>
+{{end}}

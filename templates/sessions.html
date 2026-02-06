@@ -1,0 +1,171 @@
+{{define "dashboard_content"}}
+<div id="dashboard" class="h-full flex flex-col" hx-get="/partials/sessions" hx-trigger="every 5s" hx-swap="outerHTML">
+    <!-- Stats Bar -->
+    <div class="flex-none border-b border-border/50 px-6 py-4">
+        <div class="flex items-center gap-8">
+            <div class="flex items-center gap-3">
+                <span class="w-2 h-2 rounded-full bg-antenna-green animate-pulse-glow"></span>
+                <span class="text-xs text-gray-600 uppercase tracking-widest">Live</span>
+            </div>
+            
+            <div class="flex items-baseline gap-2">
+                <span class="text-3xl font-bold text-white">{{.TotalCount}}</span>
+                <span class="text-xs text-gray-600 uppercase tracking-widest">sessions</span>
+            </div>
+            
+            <div class="flex items-center gap-6 text-sm">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-antenna-green"></span>
+                    <span class="text-antenna-green font-bold">{{.ActiveCount}}</span>
+                    <span class="text-gray-600 text-xs">active</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-antenna-purple"></span>
+                    <span class="text-antenna-purple font-bold">{{.SubCount}}</span>
+                    <span class="text-gray-600 text-xs">sub</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-antenna-orange"></span>
+                    <span class="text-antenna-orange font-bold">{{.CronCount}}</span>
+                    <span class="text-gray-600 text-xs">cron</span>
+                </div>
+            </div>
+            
+            <div class="flex-1"></div>
+            
+            <div class="flex items-baseline gap-6">
+                <div class="text-right">
+                    <div class="text-xs text-gray-600 uppercase tracking-widest mb-1">Today</div>
+                    <div class="text-xl font-bold text-antenna-green glow-green">{{formatCost .TodayCost}}</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-xs text-gray-600 uppercase tracking-widest mb-1">Total</div>
+                    <div class="text-xl font-bold text-white">{{formatCost .TotalCost}}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="flex-1 overflow-hidden grid grid-cols-12 gap-px bg-border/30">
+        
+        <!-- Left Panel - Main Sessions -->
+        <div class="col-span-8 bg-void flex flex-col overflow-hidden">
+            
+            <!-- Active -->
+            {{if .ActiveSessions}}
+            <div class="flex-none border-l-2 border-antenna-green border-glow-green">
+                <div class="px-6 py-3 flex items-center gap-3">
+                    <span class="w-1.5 h-1.5 rounded-full bg-antenna-green animate-pulse-glow"></span>
+                    <span class="text-xs font-bold uppercase tracking-widest text-antenna-green">Active</span>
+                </div>
+                <div class="px-6 pb-2 flex items-center gap-4 text-[10px] text-gray-600 uppercase tracking-wider">
+                    <span class="w-24">Session</span>
+                    <span class="flex-1"></span>
+                    <span class="w-24 text-right">Model</span>
+                    <span class="w-12 text-right">Msgs</span>
+                    <span class="w-20 text-right">Today</span>
+                    <span class="w-20 text-right">Total</span>
+                </div>
+                {{range .ActiveSessions}}
+                <a href="/session/{{.SessionID}}" class="flex items-center px-6 py-2 row-hover group">
+                    <span class="w-24 text-sm text-white font-medium truncate">{{.Name}}</span>
+                    <span class="flex-1 text-[10px] text-gray-700 font-mono truncate px-2">{{.SessionID}}</span>
+                    <span class="w-24 text-[10px] text-gray-500 text-right truncate">{{.Model}}</span>
+                    <span class="w-12 text-xs text-gray-400 text-right">{{.MessageCount}}</span>
+                    <span class="w-20 text-sm text-antenna-green text-right font-medium">{{formatCost .TodayCost}}</span>
+                    <span class="w-20 text-sm text-gray-400 text-right">{{formatCost .TotalCost}}</span>
+                </a>
+                {{end}}
+            </div>
+            {{end}}
+
+            <!-- Idle -->
+            <div class="flex-1 flex flex-col min-h-0 overflow-hidden border-l-2 border-gray-800">
+                <div class="flex-none px-6 py-3 flex items-center gap-3">
+                    <span class="w-1.5 h-1.5 rounded-full bg-gray-700"></span>
+                    <span class="text-xs font-bold uppercase tracking-widest text-gray-600">Idle</span>
+                    <span class="text-xs text-gray-700">{{len .IdleSessions}}</span>
+                </div>
+                <div class="px-6 pb-2 flex items-center gap-4 text-[10px] text-gray-700 uppercase tracking-wider">
+                    <span class="w-24">Session</span>
+                    <span class="flex-1"></span>
+                    <span class="w-12 text-right">Msgs</span>
+                    <span class="w-20 text-right">Cost</span>
+                    <span class="w-24 text-right">Last</span>
+                </div>
+                <div class="flex-1 overflow-y-auto scrollbar-thin">
+                    {{range .IdleSessions}}
+                    <a href="/session/{{.SessionID}}" class="flex items-center px-6 py-1.5 row-hover group">
+                        <span class="w-24 text-sm text-gray-500 group-hover:text-gray-300 truncate">{{.Name}}</span>
+                        <span class="flex-1 text-[10px] text-gray-800 font-mono truncate px-2">{{.SessionID}}</span>
+                        <span class="w-12 text-xs text-gray-600 text-right">{{.MessageCount}}</span>
+                        <span class="w-20 text-sm text-gray-600 text-right">{{formatCost .TotalCost}}</span>
+                        <span class="w-24 text-[10px] text-gray-700 text-right">{{.UpdatedTime.Format "Jan 2 15:04"}}</span>
+                    </a>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel - Sub-agents & Cron -->
+        <div class="col-span-4 bg-void flex flex-col overflow-hidden">
+            
+            <!-- Sub-agents -->
+            <div class="flex-1 flex flex-col min-h-0 overflow-hidden border-l-2 border-antenna-purple border-glow-purple">
+                <div class="flex-none px-5 py-3 flex items-center gap-3">
+                    <span class="text-antenna-purple">⚡</span>
+                    <span class="text-xs font-bold uppercase tracking-widest text-antenna-purple">Sub-agents</span>
+                    <span class="text-xs text-antenna-purple/50">{{len .SubAgents}}</span>
+                </div>
+                <div class="flex-1 overflow-y-auto scrollbar-thin">
+                    {{if .SubAgents}}
+                    {{range .SubAgents}}
+                    <a href="/session/{{.SessionID}}" class="block px-5 py-2 row-hover group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-400 group-hover:text-white truncate">{{.Name}}</span>
+                            {{if .IsActive}}<span class="w-1.5 h-1.5 rounded-full bg-antenna-green animate-pulse-glow"></span>{{end}}
+                        </div>
+                        <div class="flex items-center justify-between mt-1 text-[10px] text-gray-700">
+                            <span>{{.MessageCount}} msgs</span>
+                            <span class="text-gray-500">{{formatCost .TotalCost}}</span>
+                        </div>
+                    </a>
+                    {{end}}
+                    {{else}}
+                    <div class="px-5 py-8 text-xs text-gray-800 text-center">No sub-agents</div>
+                    {{end}}
+                </div>
+            </div>
+
+            <!-- Cron Jobs -->
+            <div class="flex-1 flex flex-col min-h-0 overflow-hidden border-l-2 border-antenna-orange border-glow-orange">
+                <div class="flex-none px-5 py-3 flex items-center gap-3">
+                    <span class="text-antenna-orange">⏱</span>
+                    <span class="text-xs font-bold uppercase tracking-widest text-antenna-orange">Cron</span>
+                    <span class="text-xs text-antenna-orange/50">{{len .CronJobs}}</span>
+                </div>
+                <div class="flex-1 overflow-y-auto scrollbar-thin">
+                    {{if .CronJobs}}
+                    {{range .CronJobs}}
+                    <a href="/session/{{.SessionID}}" class="block px-5 py-2 row-hover group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-400 group-hover:text-white truncate">{{.Name}}</span>
+                            {{if .IsActive}}<span class="w-1.5 h-1.5 rounded-full bg-antenna-green animate-pulse-glow"></span>{{end}}
+                        </div>
+                        <div class="flex items-center justify-between mt-1 text-[10px] text-gray-700">
+                            <span>{{.MessageCount}} msgs</span>
+                            <span class="text-gray-500">{{formatCost .TotalCost}}</span>
+                        </div>
+                    </a>
+                    {{end}}
+                    {{else}}
+                    <div class="px-5 py-8 text-xs text-gray-800 text-center">No cron jobs</div>
+                    {{end}}
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{{end}}

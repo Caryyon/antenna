@@ -1,0 +1,6 @@
+/* Prowl - OpenClaw Agent Dashboard */
+/* Using Tailwind via CDN, this file is for any custom styles */
+
+.animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

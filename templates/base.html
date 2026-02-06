@@ -1,0 +1,75 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antenna</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        void: '#050505',
+                        panel: '#0a0a0a',
+                        surface: '#111',
+                        border: '#1a1a1a',
+                        antenna: {
+                            cyan: '#00d4aa',
+                            purple: '#a855f7',
+                            orange: '#ff6b35',
+                            green: '#00ff88',
+                            red: '#ff3366',
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'SF Mono', 'Monaco', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+        html, body { height: 100%; overflow: hidden; }
+        body { background: #050505; }
+        
+        .glow-cyan { text-shadow: 0 0 20px rgba(0, 212, 170, 0.5); }
+        .glow-green { text-shadow: 0 0 20px rgba(0, 255, 136, 0.5); }
+        .glow-purple { text-shadow: 0 0 20px rgba(168, 85, 247, 0.5); }
+        .glow-orange { text-shadow: 0 0 20px rgba(255, 107, 53, 0.5); }
+        
+        .border-glow-cyan { box-shadow: inset 2px 0 8px -4px rgba(0, 212, 170, 0.4); }
+        .border-glow-green { box-shadow: inset 2px 0 8px -4px rgba(0, 255, 136, 0.4); }
+        .border-glow-purple { box-shadow: inset 2px 0 8px -4px rgba(168, 85, 247, 0.4); }
+        .border-glow-orange { box-shadow: inset 2px 0 8px -4px rgba(255, 107, 53, 0.4); }
+        
+        .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #333; }
+        
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+        
+        .row-hover { transition: all 0.15s ease; }
+        .row-hover:hover { background: rgba(255,255,255,0.02); }
+    </style>
+</head>
+<body class="bg-void text-gray-300 h-screen font-mono">
+    {{if eq .Page "sessions"}}
+        {{template "dashboard_content" .}}
+    {{else if eq .Page "session"}}
+        {{template "session_content" .}}
+    {{else}}
+        {{template "dashboard_content" .}}
+    {{end}}
+</body>
+</html>
+{{end}}
