@@ -1,12 +1,48 @@
 import { GetDashboard } from '../wailsjs/go/main/App';
 
-const formatCost = (cost) => `$${cost.toFixed(2)}`;
+const formatCost = (cost) => {
+    if (cost === undefined || cost === null) return '$0.00';
+    return `$${cost.toFixed(2)}`;
+};
+
+function renderError(message) {
+    document.getElementById('app').innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #666; font-family: 'JetBrains Mono', monospace;">
+            <div style="font-size: 48px; margin-bottom: 20px;">📡</div>
+            <div style="font-size: 14px; color: #888; margin-bottom: 10px;">Antenna</div>
+            <div style="font-size: 12px; color: #ff6b35; max-width: 400px; text-align: center;">${message}</div>
+            <div style="font-size: 11px; color: #444; margin-top: 20px;">
+                Looking for: ~/.openclaw/agents/main/sessions/
+            </div>
+        </div>
+    `;
+}
 
 function renderDashboard(data) {
-    const active = data.sessions.filter(s => s.kind === 'main' && s.isActive);
-    const idle = data.sessions.filter(s => s.kind === 'main' && !s.isActive);
-    const subs = data.sessions.filter(s => s.kind === 'subagent');
-    const crons = data.sessions.filter(s => s.kind === 'cron');
+    if (!data || !data.sessions) {
+        renderError('No data received from backend');
+        return;
+    }
+
+    const sessions = data.sessions || [];
+    const active = sessions.filter(s => s.kind === 'main' && s.isActive);
+    const idle = sessions.filter(s => s.kind === 'main' && !s.isActive);
+    const subs = sessions.filter(s => s.kind === 'subagent');
+    const crons = sessions.filter(s => s.kind === 'cron');
+
+    if (sessions.length === 0) {
+        document.getElementById('app').innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #666; font-family: 'JetBrains Mono', monospace;">
+                <div style="font-size: 48px; margin-bottom: 20px;">📡</div>
+                <div style="font-size: 14px; color: #888; margin-bottom: 10px;">Antenna</div>
+                <div style="font-size: 12px; color: #555;">No sessions found</div>
+                <div style="font-size: 11px; color: #444; margin-top: 20px;">
+                    Looking in: ~/.openclaw/agents/main/sessions/
+                </div>
+            </div>
+        `;
+        return;
+    }
 
     document.getElementById('app').innerHTML = `
         <div class="dashboard">
@@ -17,7 +53,7 @@ function renderDashboard(data) {
                     <span class="label">Live</span>
                 </div>
                 <div class="stat-group">
-                    <span class="stat-value big">${data.totalCount}</span>
+                    <span class="stat-value big">${data.totalCount || 0}</span>
                     <span class="label">sessions</span>
                 </div>
                 <div class="stat-group">
@@ -59,10 +95,10 @@ function renderDashboard(data) {
                         <div class="rows">
                             ${active.map(s => `
                             <div class="row">
-                                <span class="session-name">${s.name}</span>
-                                <span class="session-id">${s.sessionId}</span>
+                                <span class="session-name">${s.name || 'unnamed'}</span>
+                                <span class="session-id">${s.sessionId || ''}</span>
                                 <span class="model">${s.model || ''}</span>
-                                <span class="msgs">${s.messageCount}</span>
+                                <span class="msgs">${s.messageCount || 0}</span>
                                 <span class="cost green">${formatCost(s.todayCost)}</span>
                                 <span class="cost">${formatCost(s.totalCost)}</span>
                             </div>
@@ -80,9 +116,9 @@ function renderDashboard(data) {
                         <div class="rows scrollable">
                             ${idle.map(s => `
                             <div class="row dim">
-                                <span class="session-name">${s.name}</span>
-                                <span class="session-id">${s.sessionId}</span>
-                                <span class="msgs">${s.messageCount}</span>
+                                <span class="session-name">${s.name || 'unnamed'}</span>
+                                <span class="session-id">${s.sessionId || ''}</span>
+                                <span class="msgs">${s.messageCount || 0}</span>
                                 <span class="cost">${formatCost(s.totalCost)}</span>
                             </div>
                             `).join('')}
@@ -102,11 +138,11 @@ function renderDashboard(data) {
                             ${subs.length > 0 ? subs.map(s => `
                             <div class="card">
                                 <div class="card-header">
-                                    <span class="card-name">${s.name}</span>
+                                    <span class="card-name">${s.name || 'unnamed'}</span>
                                     ${s.isActive ? '<span class="live-dot small"></span>' : ''}
                                 </div>
                                 <div class="card-meta">
-                                    <span>${s.messageCount} msgs</span>
+                                    <span>${s.messageCount || 0} msgs</span>
                                     <span>${formatCost(s.totalCost)}</span>
                                 </div>
                             </div>
@@ -124,11 +160,11 @@ function renderDashboard(data) {
                             ${crons.length > 0 ? crons.map(s => `
                             <div class="card">
                                 <div class="card-header">
-                                    <span class="card-name">${s.name}</span>
+                                    <span class="card-name">${s.name || 'unnamed'}</span>
                                     ${s.isActive ? '<span class="live-dot small"></span>' : ''}
                                 </div>
                                 <div class="card-meta">
-                                    <span>${s.messageCount} msgs</span>
+                                    <span>${s.messageCount || 0} msgs</span>
                                     <span>${formatCost(s.totalCost)}</span>
                                 </div>
                             </div>
@@ -147,6 +183,7 @@ async function refresh() {
         renderDashboard(data);
     } catch (e) {
         console.error('Failed to get dashboard:', e);
+        renderError(`Error: ${e.message || e}`);
     }
 }
 
