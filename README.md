@@ -1,71 +1,47 @@
 # 📡 Antenna
 
-A real-time session monitor for [OpenClaw](https://github.com/openclaw/openclaw).
+A native desktop app for monitoring [OpenClaw](https://github.com/openclaw/openclaw) sessions.
 
-![Antenna Dashboard](https://raw.githubusercontent.com/Caryyon/antenna/main/screenshot.png)
+![Antenna](screenshot.png)
+
+## Download
+
+**[→ Download Latest Release](https://github.com/Caryyon/antenna/releases/latest)**
+
+| Platform | File |
+|----------|------|
+| **macOS** | `Antenna-macOS.zip` |
+| **Windows** | `Antenna-Windows.zip` |
+| **Linux** | `Antenna-Linux.tar.gz` |
+
+### Installation
+
+- **macOS**: Unzip → drag `Antenna.app` to Applications
+- **Windows**: Unzip → run `Antenna.exe`
+- **Linux**: Extract → run `./Antenna`
 
 ## Features
 
-- **Live dashboard** — Auto-refreshes every 5 seconds
-- **Session tracking** — Main sessions, sub-agents, and cron jobs
-- **Cost monitoring** — Today's spend vs total spend
-- **Cron job names** — Shows actual job names from config
-- **Transcript viewer** — Click any session to view full conversation
+- **Native app** — Runs in its own window, no browser
+- **Live updates** — Auto-refreshes every 5 seconds
+- **Session tracking** — Main sessions, sub-agents, cron jobs
+- **Cost monitoring** — Today's spend vs total
 
-## Installation
+## Requirements
 
-### Using Go
+OpenClaw must be installed with session data in `~/.openclaw`
 
-```bash
-go install github.com/Caryyon/antenna@latest
-```
-
-### Download Binary
-
-Grab the latest release from [Releases](https://github.com/Caryyon/antenna/releases) for your platform:
-- macOS (Intel & Apple Silicon)
-- Linux (amd64 & arm64)
-- Windows (amd64 & arm64)
-
-### From Source
+## Build from Source
 
 ```bash
+# Install Wails
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.9.0
+
+# Clone & build
 git clone https://github.com/Caryyon/antenna.git
 cd antenna
-go build -o antenna .
+wails build
 ```
-
-## Usage
-
-```bash
-# Start the dashboard
-antenna
-
-# Custom port
-PORT=8080 antenna
-
-# Custom OpenClaw directory
-OPENCLAW_DIR=/path/to/.openclaw antenna
-```
-
-Then open http://localhost:3600
-
-## Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3600` | HTTP server port |
-| `OPENCLAW_DIR` | `~/.openclaw` | OpenClaw data directory |
-
-## How It Works
-
-Antenna reads directly from OpenClaw's local data:
-
-- `~/.openclaw/agents/main/sessions/` — Session transcripts
-- `~/.openclaw/agents/main/sessions/sessions.json` — Session metadata
-- `~/.openclaw/cron/jobs.json` — Cron job definitions
-
-No API keys needed — read-only access to local files.
 
 ## License
 

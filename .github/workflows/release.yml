@@ -9,21 +9,106 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin/universal
+            output: Antenna.app
+          - os: windows-latest
+            platform: windows/amd64
+            output: Antenna.exe
+          - os: ubuntu-latest
+            platform: linux/amd64
+            output: antenna
+
+    runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
           go-version: '1.22'
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          node-version: '20'
+
+      # Linux dependencies
+      - name: Install Linux deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+
+      # Install Wails
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.9.0
+
+      # Build
+      - name: Build
+        run: wails build -platform ${{ matrix.platform }}
+
+      # Package macOS
+      - name: Package macOS
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd build/bin
+          zip -r Antenna-macOS.zip Antenna.app
+          mv Antenna-macOS.zip ../../
+
+      # Package Windows
+      - name: Package Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          Compress-Archive -Path build/bin/Antenna.exe -DestinationPath Antenna-Windows.zip
+
+      # Package Linux
+      - name: Package Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cd build/bin
+          tar -czvf Antenna-Linux.tar.gz antenna
+          mv Antenna-Linux.tar.gz ../../
+
+      # Upload artifacts
+      - name: Upload macOS
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Antenna-macOS
+          path: Antenna-macOS.zip
+
+      - name: Upload Windows
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Antenna-Windows
+          path: Antenna-Windows.zip
+
+      - name: Upload Linux
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Antenna-Linux
+          path: Antenna-Linux.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            Antenna-macOS/Antenna-macOS.zip
+            Antenna-Windows/Antenna-Windows.zip
+            Antenna-Linux/Antenna-Linux.tar.gz
+          generate_release_notes: true

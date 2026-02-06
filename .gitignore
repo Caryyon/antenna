@@ -1,0 +1,22 @@
+# Build outputs
+build/bin/
+*.exe
+*.app
+*.dmg
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.test
+*.out
