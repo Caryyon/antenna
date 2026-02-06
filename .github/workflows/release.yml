@@ -30,17 +30,46 @@ jobs:
       - name: Build
         run: wails build -platform darwin/universal
 
+      - name: Create icns icon
+        run: |
+          mkdir -p build/AppIcon.iconset
+          sips -z 16 16 build/appicon.png --out build/AppIcon.iconset/icon_16x16.png
+          sips -z 32 32 build/appicon.png --out build/AppIcon.iconset/icon_16x16@2x.png
+          sips -z 32 32 build/appicon.png --out build/AppIcon.iconset/icon_32x32.png
+          sips -z 64 64 build/appicon.png --out build/AppIcon.iconset/icon_32x32@2x.png
+          sips -z 128 128 build/appicon.png --out build/AppIcon.iconset/icon_128x128.png
+          sips -z 256 256 build/appicon.png --out build/AppIcon.iconset/icon_128x128@2x.png
+          sips -z 256 256 build/appicon.png --out build/AppIcon.iconset/icon_256x256.png
+          sips -z 512 512 build/appicon.png --out build/AppIcon.iconset/icon_256x256@2x.png
+          sips -z 512 512 build/appicon.png --out build/AppIcon.iconset/icon_512x512.png
+          sips -z 1024 1024 build/appicon.png --out build/AppIcon.iconset/icon_512x512@2x.png
+          iconutil -c icns build/AppIcon.iconset -o build/appicon.icns
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
       - name: Create DMG
         run: |
-          # Create a temporary directory for DMG contents
-          mkdir -p dmg-contents
-          cp -R build/bin/Antenna.app dmg-contents/
+          create-dmg \
+            --volname "Antenna" \
+            --volicon "build/appicon.icns" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "Antenna.app" 150 185 \
+            --hide-extension "Antenna.app" \
+            --app-drop-link 450 185 \
+            --no-internet-enable \
+            "Antenna-macOS.dmg" \
+            "build/bin/Antenna.app" || true
           
-          # Create a symlink to Applications
-          ln -s /Applications dmg-contents/Applications
-          
-          # Create DMG
-          hdiutil create -volname "Antenna" -srcfolder dmg-contents -ov -format UDZO Antenna-macOS.dmg
+          # Fallback if create-dmg fails
+          if [ ! -f Antenna-macOS.dmg ]; then
+            mkdir -p dmg-contents
+            cp -R build/bin/Antenna.app dmg-contents/
+            ln -s /Applications dmg-contents/Applications
+            hdiutil create -volname "Antenna" -srcfolder dmg-contents -ov -format UDZO Antenna-macOS.dmg
+          fi
 
       - name: Upload macOS
         uses: actions/upload-artifact@v4
