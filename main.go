@@ -8,6 +8,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -19,20 +20,20 @@ func main() {
 
 	// Create menu
 	appMenu := menu.NewMenu()
-	
+
 	// App menu (macOS)
 	appMenu.Append(menu.AppMenu())
-	
+
 	// File menu
 	fileMenu := appMenu.AddSubmenu("File")
 	fileMenu.AddText("Refresh", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
 		runtime.EventsEmit(app.ctx, "refresh")
 	})
 	fileMenu.AddSeparator()
-	fileMenu.AddText("Close Window", keys.CmdOrCtrl("w"), func(cd *menu.CallbackData) {
-		runtime.Quit(cd.MenuItem.Ctx())
+	fileMenu.AddText("Close Window", keys.CmdOrCtrl("w"), func(_ *menu.CallbackData) {
+		runtime.Quit(app.ctx)
 	})
-	
+
 	// Help menu
 	helpMenu := appMenu.AddSubmenu("Help")
 	helpMenu.AddText("GitHub Repository", nil, func(_ *menu.CallbackData) {
@@ -61,8 +62,8 @@ func main() {
 		Bind: []interface{}{
 			app,
 		},
-		Mac: &options.Mac{
-			About: &options.AboutInfo{
+		Mac: &mac.Options{
+			About: &mac.AboutInfo{
 				Title:   "Antenna",
 				Message: "OpenClaw Session Monitor\n\nVersion 1.0.2\n\nhttps://github.com/Caryyon/antenna\n\n© 2026 Cary Wolff",
 			},
