@@ -9,5 +9,12 @@
   "author": {
     "name": "Cary Wolff",
     "email": "cary@caryyon.com"
+  },
+  "info": {
+    "companyName": "Caryyon",
+    "productName": "Antenna",
+    "productVersion": "1.0.0",
+    "copyright": "© 2026 Cary Wolff",
+    "comments": "OpenClaw Session Monitor"
   }
 }
