@@ -391,8 +391,8 @@ func (m model) renderDashboard(w, h int) string {
 		leftW = w
 	}
 
-	usedRows := 4
-	footerRows := 2
+	usedRows := 16 // stats bar(2) + chart(~12) + divider(1) + gap(1)
+	footerRows := 3
 	availRows := h - usedRows - footerRows
 	if availRows < 5 {
 		availRows = 5
@@ -458,17 +458,154 @@ func (m model) renderActivityChart(w int, focused bool) string {
 	if focused {
 		headerColor = colorFocusedHeader
 	}
-	label := lipgloss.NewStyle().Bold(true).Foreground(headerColor).Render("  24H ACTIVITY ")
+	indicator := "  "
 	if focused {
-		label = lipgloss.NewStyle().Bold(true).Foreground(colorCyan).Render("▶ 24H ACTIVITY ")
+		indicator = "▶ "
 	}
-	chartW := w - lipgloss.Width(label) - 2
-	if chartW < 10 {
-		chartW = 10
+	header := lipgloss.NewStyle().Bold(true).Foreground(headerColor).Render(indicator + "24H ACTIVITY")
+
+	return header + "\n" + m.renderBarChart(w)
+}
+
+func (m model) renderBarChart(w int) string {
+	chartHeight := 8
+	blocks := []rune(" ▁▂▃▄▅▆▇█")
+
+	// Determine data: use hourly buckets, map to w columns
+	data := m.hourly
+	if len(data) == 0 {
+		return lipgloss.NewStyle().Foreground(colorDim).Render("  no activity data\n")
 	}
 
-	spark := m.renderSparkline(chartW)
-	return label + spark
+	// Reserve left margin for Y-axis labels (e.g. "  42 ") and 1 right margin
+	yLabelW := 5
+	barAreaW := w - yLabelW - 1
+	if barAreaW < 10 {
+		barAreaW = 10
+	}
+
+	// Map data buckets to bar columns. Each column represents one or more buckets.
+	numBuckets := len(data)
+	values := make([]float64, barAreaW)
+	counts := make([]int, barAreaW)
+	for i, b := range data {
+		col := i * barAreaW / numBuckets
+		if col >= barAreaW {
+			col = barAreaW - 1
+		}
+		values[col] += float64(b.Messages)
+		counts[col]++
+	}
+	// Average where multiple buckets map to same column
+	for i := range values {
+		if counts[i] > 1 {
+			values[i] /= float64(counts[i])
+		}
+	}
+
+	maxVal := 0.0
+	for _, v := range values {
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+	if maxVal == 0 {
+		maxVal = 1
+	}
+
+	// Y-axis: compute label values for top and mid rows
+	topLabel := int(math.Ceil(maxVal))
+	midLabel := topLabel / 2
+
+	var sb strings.Builder
+	dimStyle := lipgloss.NewStyle().Foreground(colorDim)
+	barStyle := lipgloss.NewStyle().Foreground(colorGreen)
+	zeroStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#1a3a1a"))
+
+	for row := chartHeight; row >= 1; row-- {
+		// Y-axis label
+		threshold := float64(row) / float64(chartHeight)
+		label := ""
+		if row == chartHeight {
+			label = fmt.Sprintf("%4d", topLabel)
+		} else if row == chartHeight/2 {
+			label = fmt.Sprintf("%4d", midLabel)
+		} else {
+			label = "    "
+		}
+		sb.WriteString(dimStyle.Render(label + " "))
+
+		// Bar characters for this row
+		for col := 0; col < barAreaW; col++ {
+			ratio := values[col] / maxVal
+			// How much of this row is filled (each row = 1/chartHeight of full scale)
+			rowBottom := float64(row-1) / float64(chartHeight)
+			rowTop := float64(row) / float64(chartHeight)
+			_ = threshold
+
+			if ratio >= rowTop {
+				// Full block
+				sb.WriteString(barStyle.Render("█"))
+			} else if ratio > rowBottom {
+				// Partial block
+				frac := (ratio - rowBottom) / (rowTop - rowBottom)
+				idx := int(math.Round(frac * 8))
+				if idx < 1 {
+					idx = 1
+				}
+				if idx > 8 {
+					idx = 8
+				}
+				sb.WriteString(barStyle.Render(string(blocks[idx])))
+			} else if values[col] > 0 && row == 1 {
+				// Show minimum bar for non-zero values
+				sb.WriteString(zeroStyle.Render("▁"))
+			} else {
+				sb.WriteString(" ")
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	// X-axis line
+	sb.WriteString(dimStyle.Render(strings.Repeat(" ", yLabelW) + strings.Repeat("─", barAreaW)))
+	sb.WriteString("\n")
+
+	// Time labels along the bottom
+	xLabels := strings.Repeat(" ", yLabelW)
+	if numBuckets > 0 {
+		// Place hour labels at evenly spaced positions
+		labelBuf := make([]byte, barAreaW)
+		for i := range labelBuf {
+			labelBuf[i] = ' '
+		}
+		// Every 3-6 hours depending on space
+		step := 6
+		if barAreaW > 80 {
+			step = 3
+		} else if barAreaW > 40 {
+			step = 4
+		}
+		for i := 0; i < numBuckets; i++ {
+			hourStr := data[i].Hour // e.g. "15:00"
+			hourNum := 0
+			fmt.Sscanf(hourStr, "%d", &hourNum)
+			if hourNum%step == 0 {
+				col := i * barAreaW / numBuckets
+				lbl := fmt.Sprintf("%02d", hourNum)
+				if col+2 <= barAreaW {
+					labelBuf[col] = lbl[0]
+					if col+1 < barAreaW {
+						labelBuf[col+1] = lbl[1]
+					}
+				}
+			}
+		}
+		xLabels += string(labelBuf)
+	}
+	sb.WriteString(dimStyle.Render(xLabels))
+
+	return sb.String()
 }
 
 func (m model) renderSessionList(active, idle []api.Session, w, maxRows int) []string {
