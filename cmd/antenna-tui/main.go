@@ -12,62 +12,24 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Gmork theme colors
+// Gmork theme colors (matching web frontend CSS variables)
 var (
-	colorGreen   = lipgloss.Color("#4EC990")
-	colorOrange  = lipgloss.Color("#E5A84B")
-	colorRed     = lipgloss.Color("#E55B5B")
-	colorDim     = lipgloss.Color("#555555")
-	colorFg      = lipgloss.Color("#CCCCCC")
-	colorBg      = lipgloss.Color("#0A0A0A")
-	colorAccent  = lipgloss.Color("#7EC8E3")
-	colorCyan    = lipgloss.Color("#56B6C2")
-
-	styleTitle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(colorGreen).
-			Padding(0, 1)
-
-	styleHeader = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(colorAccent)
-
-	styleDim = lipgloss.NewStyle().
-			Foreground(colorDim)
-
-	styleActive = lipgloss.NewStyle().
-			Foreground(colorGreen).
-			Bold(true)
-
-	styleSelected = lipgloss.NewStyle().
-			Background(lipgloss.Color("#1A2A1A")).
-			Foreground(colorFg).
-			Bold(true)
-
-	styleKindMain = lipgloss.NewStyle().
-			Foreground(colorGreen)
-
-	styleKindCron = lipgloss.NewStyle().
-			Foreground(colorOrange)
-
-	styleKindSub = lipgloss.NewStyle().
-			Foreground(colorCyan)
-
-	styleCost = lipgloss.NewStyle().
-			Foreground(colorOrange)
-
-	styleBar = lipgloss.NewStyle().
-			Foreground(colorGreen)
-
-	styleHelp = lipgloss.NewStyle().
-			Foreground(colorDim).
-			Padding(1, 1)
+	colorGreen  = lipgloss.Color("#00ff99")
+	colorOrange = lipgloss.Color("#ff8c4c")
+	colorPurple = lipgloss.Color("#bf6fff")
+	colorRed    = lipgloss.Color("#ff4477")
+	colorCyan   = lipgloss.Color("#00ffd5")
+	colorDim    = lipgloss.Color("#555555")
+	colorFg     = lipgloss.Color("#bbbbbb")
+	colorWhite  = lipgloss.Color("#ffffff")
+	colorBorder = lipgloss.Color("#1a1a1a")
+	colorPanel  = lipgloss.Color("#0a0a0a")
 )
 
 type view int
 
 const (
-	viewList view = iota
+	viewDashboard view = iota
 	viewDetail
 )
 
@@ -82,7 +44,45 @@ type model struct {
 	width     int
 	height    int
 	interval  time.Duration
+	section   int // 0=active, 1=idle, 2=sub, 3=cron
 	err       error
+}
+
+// grouped returns sessions split by kind
+func (m model) grouped() (active, idle, subs, crons []api.Session) {
+	for _, s := range m.dashboard.Sessions {
+		switch s.Kind {
+		case "cron":
+			crons = append(crons, s)
+		case "subagent":
+			subs = append(subs, s)
+		default:
+			if s.IsActive {
+				active = append(active, s)
+			} else {
+				idle = append(idle, s)
+			}
+		}
+	}
+	return
+}
+
+// flatList returns the session at the current cursor position across all groups
+func (m model) selectedSession() (api.Session, bool) {
+	active, idle, subs, crons := m.grouped()
+	all := make([]api.Session, 0, len(m.dashboard.Sessions))
+	all = append(all, active...)
+	all = append(all, idle...)
+	all = append(all, subs...)
+	all = append(all, crons...)
+	if m.cursor >= 0 && m.cursor < len(all) {
+		return all[m.cursor], true
+	}
+	return api.Session{}, false
+}
+
+func (m model) totalItems() int {
+	return len(m.dashboard.Sessions)
 }
 
 func initialModel() model {
@@ -91,14 +91,12 @@ func initialModel() model {
 		home, _ := os.UserHomeDir()
 		dir = home + "/.openclaw"
 	}
-
 	interval := 5 * time.Second
 	if v := os.Getenv("ANTENNA_INTERVAL"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			interval = d
 		}
 	}
-
 	c := api.NewClient(dir)
 	return model{
 		client:    c,
@@ -122,46 +120,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			if m.view == viewDetail {
-				m.view = viewList
+				m.view = viewDashboard
 				return m, nil
 			}
 			return m, tea.Quit
 		case "j", "down":
-			if m.view == viewList && m.cursor < len(m.dashboard.Sessions)-1 {
+			if m.view == viewDashboard && m.cursor < m.totalItems()-1 {
 				m.cursor++
 			}
-			return m, nil
 		case "k", "up":
-			if m.view == viewList && m.cursor > 0 {
+			if m.view == viewDashboard && m.cursor > 0 {
 				m.cursor--
 			}
-			return m, nil
 		case "enter":
-			if m.view == viewList && len(m.dashboard.Sessions) > 0 {
+			if m.view == viewDashboard && m.totalItems() > 0 {
 				m.view = viewDetail
 			}
-			return m, nil
 		case "esc", "backspace":
-			m.view = viewList
-			return m, nil
+			m.view = viewDashboard
 		case "tab":
-			if m.view == viewList {
+			if m.view == viewDashboard {
 				m.view = viewDetail
 			} else {
-				m.view = viewList
+				m.view = viewDashboard
 			}
-			return m, nil
 		case "r":
 			m.dashboard = m.client.GetDashboard()
 			m.hourly = m.client.GetHourlyActivity()
-			return m, nil
 		}
+		return m, nil
 
 	case tickMsg:
 		m.dashboard = m.client.GetDashboard()
 		m.hourly = m.client.GetHourlyActivity()
-		if m.cursor >= len(m.dashboard.Sessions) && len(m.dashboard.Sessions) > 0 {
-			m.cursor = len(m.dashboard.Sessions) - 1
+		if m.cursor >= m.totalItems() && m.totalItems() > 0 {
+			m.cursor = m.totalItems() - 1
 		}
 		return m, tickCmd(m.interval)
 
@@ -170,7 +163,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 	}
-
 	return m, nil
 }
 
@@ -186,146 +178,415 @@ func (m model) View() string {
 
 	var b strings.Builder
 
-	// Header
-	header := styleTitle.Render("📡 Antenna") +
-		styleDim.Render(" — OpenClaw Monitor") +
-		"  " +
-		styleCost.Render(fmt.Sprintf("Today: $%.4f", m.dashboard.TodayCost)) +
-		styleDim.Render(fmt.Sprintf("  Total: $%.4f  Sessions: %d", m.dashboard.TotalCost, m.dashboard.TotalCount))
-	b.WriteString(header + "\n")
-	b.WriteString(styleDim.Render(strings.Repeat("─", min(w, 120))) + "\n")
+	// ── Stats Bar ──
+	b.WriteString(m.renderStatsBar(w))
+	b.WriteString("\n")
 
 	switch m.view {
-	case viewList:
-		b.WriteString(m.renderList(w, h-5))
+	case viewDashboard:
+		b.WriteString(m.renderDashboard(w, h))
 	case viewDetail:
-		b.WriteString(m.renderDetail(w, h-5))
+		b.WriteString(m.renderDetail(w, h))
+	}
+
+	return b.String()
+}
+
+func (m model) renderStatsBar(w int) string {
+	active, idle, subs, crons := m.grouped()
+
+	sep := lipgloss.NewStyle().Foreground(colorBorder).Render(" │ ")
+
+	parts := []string{
+		lipgloss.NewStyle().Bold(true).Foreground(colorGreen).Render("📡 Antenna"),
+	}
+
+	// Total count
+	parts = append(parts, sep)
+	parts = append(parts, lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Render(fmt.Sprintf("%d", m.dashboard.TotalCount))+
+		lipgloss.NewStyle().Foreground(colorDim).Render(" sessions"))
+
+	// Active
+	parts = append(parts, sep)
+	parts = append(parts, lipgloss.NewStyle().Foreground(colorGreen).Render("●")+
+		lipgloss.NewStyle().Bold(true).Foreground(colorGreen).Render(fmt.Sprintf(" %d", len(active)))+
+		lipgloss.NewStyle().Foreground(colorDim).Render(" active"))
+
+	// Idle
+	_ = idle
+
+	// Sub-agents
+	parts = append(parts, sep)
+	parts = append(parts, lipgloss.NewStyle().Foreground(colorPurple).Render("●")+
+		lipgloss.NewStyle().Bold(true).Foreground(colorPurple).Render(fmt.Sprintf(" %d", len(subs)))+
+		lipgloss.NewStyle().Foreground(colorDim).Render(" sub"))
+
+	// Cron
+	parts = append(parts, sep)
+	parts = append(parts, lipgloss.NewStyle().Foreground(colorOrange).Render("●")+
+		lipgloss.NewStyle().Bold(true).Foreground(colorOrange).Render(fmt.Sprintf(" %d", len(crons)))+
+		lipgloss.NewStyle().Foreground(colorDim).Render(" cron"))
+
+	left := strings.Join(parts, "")
+
+	// Cost info on right
+	todayCost := lipgloss.NewStyle().Foreground(colorDim).Render("Today ") +
+		lipgloss.NewStyle().Bold(true).Foreground(colorGreen).Render(fmt.Sprintf("$%.2f", m.dashboard.TodayCost))
+	totalCost := lipgloss.NewStyle().Foreground(colorDim).Render("  Total ") +
+		lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Render(fmt.Sprintf("$%.2f", m.dashboard.TotalCost))
+	right := todayCost + totalCost
+
+	// Pad to fill width
+	leftLen := lipgloss.Width(left)
+	rightLen := lipgloss.Width(right)
+	gap := w - leftLen - rightLen
+	if gap < 1 {
+		gap = 1
+	}
+
+	bar := left + strings.Repeat(" ", gap) + right
+	divider := lipgloss.NewStyle().Foreground(colorBorder).Render(strings.Repeat("─", w))
+
+	return bar + "\n" + divider
+}
+
+func (m model) renderDashboard(w, h int) string {
+	var b strings.Builder
+
+	// ── Activity Chart (full width) ──
+	b.WriteString(m.renderActivityChart(w))
+	b.WriteString("\n")
+	b.WriteString(lipgloss.NewStyle().Foreground(colorBorder).Render(strings.Repeat("─", w)))
+	b.WriteString("\n")
+
+	active, idle, subs, crons := m.grouped()
+
+	// Calculate layout: if wide enough, use two columns (sessions left, sub/cron right)
+	useColumns := w >= 100
+	var leftW, rightW int
+	if useColumns {
+		rightW = clampInt(w*35/100, 30, 60)
+		leftW = w - rightW - 3 // 3 for separator
+	} else {
+		leftW = w
+	}
+
+	// Remaining height for sessions
+	usedRows := 4 // stats bar + divider + chart + divider
+	footerRows := 2
+	availRows := h - usedRows - footerRows
+	if availRows < 5 {
+		availRows = 5
+	}
+
+	// Left panel: Active + Idle sessions
+	leftLines := m.renderSessionList(active, idle, leftW, availRows)
+
+	if useColumns {
+		// Right panel: Sub-agents + Cron
+		rightLines := m.renderSidePanels(subs, crons, rightW, availRows)
+
+		// Merge columns
+		maxLines := maxInt(len(leftLines), len(rightLines))
+		sep := lipgloss.NewStyle().Foreground(colorBorder).Render(" │ ")
+		for i := 0; i < maxLines && i < availRows; i++ {
+			left := ""
+			if i < len(leftLines) {
+				left = leftLines[i]
+			}
+			right := ""
+			if i < len(rightLines) {
+				right = rightLines[i]
+			}
+			// Pad left to exact width
+			left = padRight(left, leftW)
+			right = padRight(right, rightW)
+			b.WriteString(left + sep + right + "\n")
+		}
+	} else {
+		// Single column: all sections stacked
+		for i, line := range leftLines {
+			if i >= availRows {
+				break
+			}
+			b.WriteString(line + "\n")
+		}
+		// Then sub/cron below
+		sideLines := m.renderSidePanels(subs, crons, w, availRows-len(leftLines))
+		for _, line := range sideLines {
+			b.WriteString(line + "\n")
+		}
 	}
 
 	// Footer
 	b.WriteString("\n")
-	if m.view == viewList {
-		b.WriteString(styleHelp.Render("j/k: navigate  enter: details  r: refresh  tab: toggle  q: quit"))
-	} else {
-		b.WriteString(styleHelp.Render("esc/q: back  r: refresh  tab: toggle"))
-	}
+	help := lipgloss.NewStyle().Foreground(colorDim).Render("  j/k navigate  enter details  r refresh  tab toggle  q quit")
+	b.WriteString(help)
 
 	return b.String()
 }
 
-func (m model) renderList(w, maxRows int) string {
-	var b strings.Builder
+func (m model) renderActivityChart(w int) string {
+	label := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#777777")).Render("  24H ACTIVITY ")
+	chartW := w - lipgloss.Width(label) - 2
+	if chartW < 10 {
+		chartW = 10
+	}
 
-	// Activity sparkline
-	b.WriteString(styleHeader.Render("  24h Activity ") + " ")
-	b.WriteString(m.renderSparkline(min(w-18, 48)) + "\n\n")
+	spark := m.renderSparkline(chartW)
+	return label + spark
+}
 
-	// Column headers
-	hdr := fmt.Sprintf("  %-3s %-30s %-10s %-8s %-10s %-10s %s",
-		"", "NAME", "KIND", "MSGS", "TODAY", "TOTAL", "UPDATED")
-	b.WriteString(styleDim.Render(hdr) + "\n")
+func (m model) renderSessionList(active, idle []api.Session, w, maxRows int) []string {
+	var lines []string
+	cursor := m.cursor
 
-	for i, s := range m.dashboard.Sessions {
-		if i >= maxRows-4 {
-			b.WriteString(styleDim.Render(fmt.Sprintf("  ... and %d more", len(m.dashboard.Sessions)-i)) + "\n")
-			break
+	// Active section
+	if len(active) > 0 {
+		header := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("  ● ACTIVE")
+		lines = append(lines, header)
+		for i, s := range active {
+			line := m.renderSessionRow(s, w, cursor == i)
+			lines = append(lines, line)
 		}
+		lines = append(lines, "") // spacer
+	}
 
-		// Status indicator
-		var dot string
-		if s.IsActive {
-			dot = styleActive.Render("●")
-		} else {
-			dot = styleDim.Render("○")
+	// Idle section
+	idleOffset := len(active)
+	header := lipgloss.NewStyle().Foreground(colorDim).Render("  ○ IDLE") +
+		lipgloss.NewStyle().Foreground(colorDim).Render(fmt.Sprintf(" %d", len(idle)))
+	lines = append(lines, header)
+
+	for i, s := range idle {
+		globalIdx := idleOffset + i
+		line := m.renderSessionRow(s, w, cursor == globalIdx)
+		// Dim idle rows
+		if cursor != globalIdx {
+			line = lipgloss.NewStyle().Foreground(colorDim).Render(stripAnsi(line))
+			line = m.renderSessionRowDim(s, w)
 		}
+		lines = append(lines, line)
+	}
 
-		// Kind badge
-		var kind string
-		switch s.Kind {
-		case "main":
-			kind = styleKindMain.Render("main   ")
-		case "cron":
-			kind = styleKindCron.Render("cron   ")
-		case "subagent":
-			kind = styleKindSub.Render("sub    ")
-		default:
-			kind = styleDim.Render(fmt.Sprintf("%-7s", s.Kind))
-		}
+	return lines
+}
 
-		name := s.Name
-		if len(name) > 28 {
-			name = name[:27] + "…"
-		}
+func (m model) renderSessionRow(s api.Session, w int, selected bool) string {
+	// Adaptive column widths based on terminal width
+	nameW := clampInt(w*30/100, 15, 40)
+	modelW := clampInt(w*15/100, 8, 25)
 
-		ago := timeAgo(s.UpdatedAt)
+	dot := lipgloss.NewStyle().Foreground(colorGreen).Render("●")
+	if !s.IsActive {
+		dot = lipgloss.NewStyle().Foreground(colorDim).Render("○")
+	}
 
-		line := fmt.Sprintf("  %s %-30s %s %-8d %-10s %-10s %s",
+	name := truncate(s.Name, nameW)
+	name = fmt.Sprintf("%-*s", nameW, name)
+
+	mdl := truncate(modelDisplay(s.Model), modelW)
+	mdl = fmt.Sprintf("%-*s", modelW, mdl)
+
+	msgs := fmt.Sprintf("%4d", s.MessageCount)
+	today := fmt.Sprintf("$%.2f", s.TodayCost)
+	total := fmt.Sprintf("$%.2f", s.TotalCost)
+	ago := timeAgo(s.UpdatedAt)
+
+	var line string
+	if w >= 120 {
+		line = fmt.Sprintf("  %s %s %s %s %s %s  %s",
 			dot,
-			name,
-			kind,
-			s.MessageCount,
-			styleCost.Render(fmt.Sprintf("$%.4f", s.TodayCost)),
-			styleCost.Render(fmt.Sprintf("$%.4f", s.TotalCost)),
-			styleDim.Render(ago),
+			lipgloss.NewStyle().Foreground(colorWhite).Render(name),
+			lipgloss.NewStyle().Foreground(colorDim).Render(mdl),
+			lipgloss.NewStyle().Foreground(colorFg).Render(msgs),
+			lipgloss.NewStyle().Foreground(colorGreen).Render(fmt.Sprintf("%8s", today)),
+			lipgloss.NewStyle().Foreground(colorFg).Render(fmt.Sprintf("%8s", total)),
+			lipgloss.NewStyle().Foreground(colorDim).Render(ago),
 		)
-
-		if i == m.cursor {
-			line = styleSelected.Render(line)
-		}
-		b.WriteString(line + "\n")
+	} else if w >= 80 {
+		line = fmt.Sprintf("  %s %s %s %s %s",
+			dot,
+			lipgloss.NewStyle().Foreground(colorWhite).Render(name),
+			lipgloss.NewStyle().Foreground(colorFg).Render(msgs),
+			lipgloss.NewStyle().Foreground(colorGreen).Render(fmt.Sprintf("%8s", today)),
+			lipgloss.NewStyle().Foreground(colorDim).Render(ago),
+		)
+	} else {
+		line = fmt.Sprintf("  %s %s %s",
+			dot,
+			lipgloss.NewStyle().Foreground(colorWhite).Render(truncate(s.Name, 20)),
+			lipgloss.NewStyle().Foreground(colorGreen).Render(today),
+		)
 	}
 
-	if len(m.dashboard.Sessions) == 0 {
-		b.WriteString(styleDim.Render("  No sessions found. Is OpenClaw running?\n"))
+	if selected {
+		line = lipgloss.NewStyle().
+			Background(lipgloss.Color("#1a2a1a")).
+			Bold(true).
+			Render(padRight(line, w))
 	}
 
-	return b.String()
+	return line
 }
 
-func (m model) renderDetail(w, maxRows int) string {
-	if m.cursor >= len(m.dashboard.Sessions) {
-		return styleDim.Render("  No session selected\n")
+func (m model) renderSessionRowDim(s api.Session, w int) string {
+	nameW := clampInt(w*30/100, 15, 40)
+
+	name := truncate(s.Name, nameW)
+	name = fmt.Sprintf("%-*s", nameW, name)
+
+	msgs := fmt.Sprintf("%4d", s.MessageCount)
+	total := fmt.Sprintf("$%.2f", s.TotalCost)
+	ago := timeAgo(s.UpdatedAt)
+
+	dim := lipgloss.NewStyle().Foreground(colorDim)
+
+	if w >= 80 {
+		return fmt.Sprintf("  %s %s %s %s  %s",
+			dim.Render("○"),
+			dim.Render(name),
+			dim.Render(msgs),
+			dim.Render(fmt.Sprintf("%8s", total)),
+			dim.Render(ago),
+		)
+	}
+	return fmt.Sprintf("  %s %s %s",
+		dim.Render("○"),
+		dim.Render(truncate(s.Name, 20)),
+		dim.Render(total),
+	)
+}
+
+func (m model) renderSidePanels(subs, crons []api.Session, w, maxRows int) []string {
+	var lines []string
+
+	// Sub-agents
+	header := lipgloss.NewStyle().Foreground(colorPurple).Bold(true).Render("  ⚡ SUB-AGENTS") +
+		lipgloss.NewStyle().Foreground(colorPurple).Render(fmt.Sprintf(" %d", len(subs)))
+	lines = append(lines, header)
+
+	if len(subs) == 0 {
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorDim).Render("    None"))
+	} else {
+		for _, s := range subs {
+			lines = append(lines, m.renderCard(s, w, colorPurple))
+		}
 	}
 
-	s := m.dashboard.Sessions[m.cursor]
-	var b strings.Builder
+	lines = append(lines, "") // spacer
 
-	// Status
+	// Cron jobs
+	header = lipgloss.NewStyle().Foreground(colorOrange).Bold(true).Render("  ⏱ CRON") +
+		lipgloss.NewStyle().Foreground(colorOrange).Render(fmt.Sprintf(" %d", len(crons)))
+	lines = append(lines, header)
+
+	if len(crons) == 0 {
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorDim).Render("    None"))
+	} else {
+		for _, s := range crons {
+			lines = append(lines, m.renderCard(s, w, colorOrange))
+		}
+	}
+
+	return lines
+}
+
+func (m model) renderCard(s api.Session, w int, accent lipgloss.Color) string {
+	nameW := clampInt(w-20, 10, 40)
+	name := truncate(s.Name, nameW)
+
+	activeDot := ""
+	if s.IsActive {
+		activeDot = lipgloss.NewStyle().Foreground(colorGreen).Render(" ●")
+	}
+
+	meta := fmt.Sprintf("%d msgs  $%.2f", s.MessageCount, s.TotalCost)
+
+	line1 := fmt.Sprintf("    %s%s",
+		lipgloss.NewStyle().Foreground(colorFg).Render(name),
+		activeDot,
+	)
+	line2 := fmt.Sprintf("    %s",
+		lipgloss.NewStyle().Foreground(colorDim).Render(meta),
+	)
+
+	// For wider terminals, put on one line
+	if w >= 50 {
+		gap := w - lipgloss.Width(line1) - lipgloss.Width(meta) - 6
+		if gap < 2 {
+			gap = 2
+		}
+		return line1 + strings.Repeat(" ", gap) + lipgloss.NewStyle().Foreground(colorDim).Render(meta)
+	}
+	return line1 + "\n" + line2
+}
+
+func (m model) renderDetail(w, h int) string {
+	s, ok := m.selectedSession()
+	if !ok {
+		return lipgloss.NewStyle().Foreground(colorDim).Render("  No session selected\n")
+	}
+
+	cardW := clampInt(w-4, 40, 100)
+
+	border := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorBorder).
+		Padding(1, 2).
+		Width(cardW)
+
 	var status string
 	if s.IsActive {
-		status = styleActive.Render("● Active")
+		status = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● Active")
 	} else {
-		status = styleDim.Render("○ Inactive")
+		status = lipgloss.NewStyle().Foreground(colorDim).Render("○ Inactive")
 	}
 
-	b.WriteString(styleHeader.Render("  Session Detail") + "\n\n")
-	b.WriteString(fmt.Sprintf("  Name:      %s\n", styleTitle.Render(s.Name)))
-	b.WriteString(fmt.Sprintf("  Status:    %s\n", status))
-	b.WriteString(fmt.Sprintf("  Kind:      %s\n", s.Kind))
-	b.WriteString(fmt.Sprintf("  Model:     %s\n", modelDisplay(s.Model)))
-	b.WriteString(fmt.Sprintf("  Messages:  %d\n", s.MessageCount))
-	b.WriteString(fmt.Sprintf("  Today:     %s\n", styleCost.Render(fmt.Sprintf("$%.4f", s.TodayCost))))
-	b.WriteString(fmt.Sprintf("  Total:     %s\n", styleCost.Render(fmt.Sprintf("$%.4f", s.TotalCost))))
-	b.WriteString(fmt.Sprintf("  Updated:   %s (%s)\n",
-		time.UnixMilli(s.UpdatedAt).Format("2006-01-02 15:04:05"),
-		timeAgo(s.UpdatedAt)))
-	b.WriteString(fmt.Sprintf("  Session:   %s\n", styleDim.Render(s.SessionID)))
+	// Kind badge color
+	kindColor := colorGreen
+	switch s.Kind {
+	case "cron":
+		kindColor = colorOrange
+	case "subagent":
+		kindColor = colorPurple
+	}
 
-	b.WriteString("\n")
-	b.WriteString(styleHeader.Render("  24h Activity") + "\n")
-	b.WriteString("  " + m.renderSparkline(min(w-4, 48)) + "\n")
+	labelStyle := lipgloss.NewStyle().Foreground(colorDim).Width(12)
+	valStyle := lipgloss.NewStyle().Foreground(colorFg)
 
-	return b.String()
+	content := strings.Join([]string{
+		lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Render(s.Name),
+		"",
+		labelStyle.Render("Status") + "  " + status,
+		labelStyle.Render("Kind") + "  " + lipgloss.NewStyle().Foreground(kindColor).Render(s.Kind),
+		labelStyle.Render("Model") + "  " + valStyle.Render(modelDisplay(s.Model)),
+		labelStyle.Render("Messages") + "  " + valStyle.Render(fmt.Sprintf("%d", s.MessageCount)),
+		labelStyle.Render("Today") + "  " + lipgloss.NewStyle().Foreground(colorGreen).Render(fmt.Sprintf("$%.4f", s.TodayCost)),
+		labelStyle.Render("Total") + "  " + valStyle.Render(fmt.Sprintf("$%.4f", s.TotalCost)),
+		labelStyle.Render("Updated") + "  " + valStyle.Render(
+			time.UnixMilli(s.UpdatedAt).Format("2006-01-02 15:04:05")+
+				" ("+timeAgo(s.UpdatedAt)+")"),
+		labelStyle.Render("Session") + "  " + lipgloss.NewStyle().Foreground(colorDim).Render(s.SessionID),
+		"",
+		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#777777")).Render("24H ACTIVITY"),
+		m.renderSparkline(clampInt(cardW-6, 20, 80)),
+	}, "\n")
+
+	card := border.Render(content)
+
+	// Center the card
+	return "\n" + lipgloss.NewStyle().Width(w).Align(lipgloss.Center).Render(card) + "\n\n" +
+		lipgloss.NewStyle().Foreground(colorDim).Render("  esc/q back  r refresh  tab toggle")
 }
 
 func (m model) renderSparkline(width int) string {
 	if len(m.hourly) == 0 {
-		return styleDim.Render("no data")
+		return lipgloss.NewStyle().Foreground(colorDim).Render("no data")
 	}
 
 	blocks := []rune("▁▂▃▄▅▆▇█")
 
-	// Find max
 	maxVal := 0
 	for _, h := range m.hourly {
 		if h.Messages > maxVal {
@@ -333,11 +594,11 @@ func (m model) renderSparkline(width int) string {
 		}
 	}
 	if maxVal == 0 {
-		return styleDim.Render(strings.Repeat("▁", min(len(m.hourly), width)))
+		return lipgloss.NewStyle().Foreground(colorDim).Render(strings.Repeat("▁", minInt(len(m.hourly), width)))
 	}
 
 	var sb strings.Builder
-	count := min(len(m.hourly), width)
+	count := minInt(len(m.hourly), width)
 	for i := len(m.hourly) - count; i < len(m.hourly); i++ {
 		ratio := float64(m.hourly[i].Messages) / float64(maxVal)
 		idx := int(math.Round(ratio * float64(len(blocks)-1)))
@@ -345,14 +606,15 @@ func (m model) renderSparkline(width int) string {
 			idx = 0
 		}
 		if m.hourly[i].Messages > 0 {
-			sb.WriteString(styleBar.Render(string(blocks[idx])))
+			sb.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render(string(blocks[idx])))
 		} else {
-			sb.WriteString(styleDim.Render(string(blocks[0])))
+			sb.WriteString(lipgloss.NewStyle().Foreground(colorDim).Render(string(blocks[0])))
 		}
 	}
-
 	return sb.String()
 }
+
+// ── Helpers ──
 
 func timeAgo(ms int64) string {
 	d := time.Since(time.UnixMilli(ms))
@@ -370,19 +632,55 @@ func timeAgo(ms int64) string {
 
 func modelDisplay(m string) string {
 	if m == "" {
-		return styleDim.Render("unknown")
+		return "unknown"
 	}
-	// Shorten common prefixes
 	m = strings.TrimPrefix(m, "anthropic/")
 	m = strings.TrimPrefix(m, "openai/")
 	return m
 }
 
-func min(a, b int) int {
+func truncate(s string, max int) string {
+	if len(s) > max {
+		return s[:max-1] + "…"
+	}
+	return s
+}
+
+func padRight(s string, w int) string {
+	cur := lipgloss.Width(s)
+	if cur >= w {
+		return s
+	}
+	return s + strings.Repeat(" ", w-cur)
+}
+
+func stripAnsi(s string) string {
+	// Simple approach - not used in hot path
+	return s
+}
+
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}
 	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
 func main() {
