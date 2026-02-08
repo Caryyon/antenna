@@ -17,7 +17,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -85,7 +85,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -115,7 +115,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -144,8 +144,49 @@ jobs:
           name: Antenna-Linux
           path: Antenna-Linux.tar.gz
 
+  build-tui:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - os: ubuntu-22.04
+            goos: windows
+            goarch: amd64
+            suffix: windows-amd64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build TUI
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -o antenna-tui-${{ matrix.suffix }} ./cmd/antenna-tui
+
+      - name: Upload TUI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: antenna-tui-${{ matrix.suffix }}
+          path: antenna-tui-${{ matrix.suffix }}
+
   release:
-    needs: [build-macos, build-windows, build-linux]
+    needs: [build-macos, build-windows, build-linux, build-tui]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -158,4 +199,8 @@ jobs:
             Antenna-macOS/Antenna-macOS.dmg
             Antenna-Windows/Antenna-Windows.zip
             Antenna-Linux/Antenna-Linux.tar.gz
+            antenna-tui-linux-amd64/antenna-tui-linux-amd64
+            antenna-tui-darwin-arm64/antenna-tui-darwin-arm64
+            antenna-tui-darwin-amd64/antenna-tui-darwin-amd64
+            antenna-tui-windows-amd64.exe/antenna-tui-windows-amd64.exe
           generate_release_notes: true

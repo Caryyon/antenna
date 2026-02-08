@@ -46,11 +46,38 @@ OpenClaw is powerful, but when you're running multiple agents, sub-agents, and c
 | 🌙 **Dark Theme** | Easy on the eyes, matches your terminal |
 | ⌨️ **Keyboard Shortcuts** | Cmd+R to refresh, Cmd+W to close |
 
+## Two Interfaces
+
+Antenna ships in two flavors:
+
+| | **GUI** (Desktop) | **TUI** (Terminal) |
+|---|---|---|
+| **Tech** | Wails + Web frontend | Bubble Tea + Lip Gloss |
+| **Install** | Download from Releases | Download from Releases or `go install` |
+| **Entry point** | `cmd/antenna/` (root `main.go`) | `cmd/antenna-tui/` |
+| **Platforms** | macOS, Windows, Linux | Anywhere with a terminal |
+
+### TUI Screenshot
+
+```
+📡 Antenna — OpenClaw Monitor  Today: $0.1234  Total: $1.5678  Sessions: 12
+────────────────────────────────────────────────────────────────
+  24h Activity  ▁▁▃▅▇█▆▃▁▁▁▁▁▂▃▅▇▆▄▂▁▁▁▁
+
+  ● My Session           main    42     $0.0500   $0.1200   5m ago
+  ○ cron-heartbeat       cron    10     $0.0100   $0.0300   2h ago
+  ● antenna-tui          sub     8      $0.0080   $0.0080   just now
+
+j/k: navigate  enter: details  r: refresh  tab: toggle  q: quit
+```
+
 ## Requirements
 
 - [OpenClaw](https://github.com/openclaw/openclaw) installed with session data in `~/.openclaw`
 
 ## Build from Source
+
+### GUI (Desktop App)
 
 ```bash
 # Install Wails CLI
@@ -66,6 +93,39 @@ wails dev
 # Build release
 wails build
 ```
+
+### TUI (Terminal)
+
+```bash
+git clone https://github.com/Caryyon/antenna.git
+cd antenna
+
+# Build
+go build -o antenna-tui ./cmd/antenna-tui
+
+# Or install directly
+go install github.com/Caryyon/antenna/cmd/antenna-tui@latest
+
+# Run
+./antenna-tui
+```
+
+### TUI Configuration
+
+| Env Variable | Default | Description |
+|---|---|---|
+| `OPENCLAW_DIR` | `~/.openclaw` | Path to OpenClaw data directory |
+| `ANTENNA_INTERVAL` | `5s` | Auto-refresh polling interval |
+
+### TUI Keybindings
+
+| Key | Action |
+|---|---|
+| `j` / `k` / `↑` / `↓` | Navigate sessions |
+| `Enter` | View session details |
+| `Esc` / `q` | Back / Quit |
+| `Tab` | Toggle list ↔ detail |
+| `r` | Force refresh |
 
 ## Roadmap
 
