@@ -5,3 +5,7 @@
 export function GetDashboard() {
   return window['go']['main']['App']['GetDashboard']();
 }
+
+export function GetHourlyActivity() {
+  return window['go']['main']['App']['GetHourlyActivity']();
+}

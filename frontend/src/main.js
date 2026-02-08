@@ -1,4 +1,5 @@
-import { GetDashboard } from '../wailsjs/go/main/App';
+import { GetDashboard, GetHourlyActivity } from '../wailsjs/go/main/App';
+import Chart from 'chart.js/auto';
 
 const formatCost = (cost) => {
     if (cost === undefined || cost === null) return '$0.00';
@@ -19,6 +20,11 @@ function renderError(message) {
 }
 
 function renderDashboard(data) {
+    // Destroy chart before replacing DOM
+    if (activityChart) {
+        activityChart.destroy();
+        activityChart = null;
+    }
     if (!data || !data.sessions) {
         renderError('No data received from backend');
         return;
@@ -80,6 +86,11 @@ function renderDashboard(data) {
                     <div class="cost-label">Total</div>
                     <div class="cost-value">${formatCost(data.totalCost)}</div>
                 </div>
+            </div>
+
+            <!-- Activity Chart -->
+            <div class="chart-container">
+                <canvas id="activityChart"></canvas>
             </div>
 
             <!-- Main Grid -->
@@ -177,10 +188,147 @@ function renderDashboard(data) {
     `;
 }
 
+let activityChart = null;
+
+function renderActivityChart(data) {
+    const canvas = document.getElementById('activityChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    const labels = data.map(b => b.hour);
+    const messages = data.map(b => b.messages);
+    const costs = data.map(b => Math.round(b.cost * 100) / 100);
+
+    if (activityChart) {
+        activityChart.data.labels = labels;
+        activityChart.data.datasets[0].data = messages;
+        activityChart.data.datasets[1].data = costs;
+        activityChart.update('none');
+        return;
+    }
+
+    activityChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Messages',
+                    data: messages,
+                    backgroundColor: 'rgba(0, 255, 136, 0.3)',
+                    borderColor: 'rgba(0, 255, 136, 0.8)',
+                    borderWidth: 1,
+                    borderRadius: 2,
+                    yAxisID: 'y',
+                    order: 2,
+                },
+                {
+                    label: 'Cost ($)',
+                    data: costs,
+                    type: 'line',
+                    borderColor: 'rgba(168, 85, 247, 0.9)',
+                    backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    pointHoverBackgroundColor: '#a855f7',
+                    fill: true,
+                    tension: 0.4,
+                    yAxisID: 'y1',
+                    order: 1,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    align: 'end',
+                    labels: {
+                        color: '#555',
+                        font: { family: "'JetBrains Mono', monospace", size: 10 },
+                        boxWidth: 12,
+                        boxHeight: 2,
+                        padding: 12,
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#111',
+                    borderColor: '#1a1a1a',
+                    borderWidth: 1,
+                    titleFont: { family: "'JetBrains Mono', monospace", size: 11 },
+                    bodyFont: { family: "'JetBrains Mono', monospace", size: 11 },
+                    titleColor: '#888',
+                    bodyColor: '#ccc',
+                    padding: 10,
+                    displayColors: true,
+                    callbacks: {
+                        label: function(ctx) {
+                            if (ctx.dataset.label === 'Cost ($)') {
+                                return ` Cost: $${ctx.parsed.y.toFixed(2)}`;
+                            }
+                            return ` Messages: ${ctx.parsed.y}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
+                    ticks: {
+                        color: '#333',
+                        font: { family: "'JetBrains Mono', monospace", size: 9 },
+                        maxRotation: 0,
+                        callback: function(val, idx) {
+                            return idx % 3 === 0 ? this.getLabelForValue(val) : '';
+                        }
+                    },
+                    border: { display: false },
+                },
+                y: {
+                    position: 'left',
+                    grid: { color: 'rgba(0, 255, 136, 0.04)', drawBorder: false },
+                    ticks: {
+                        color: 'rgba(0, 255, 136, 0.4)',
+                        font: { family: "'JetBrains Mono', monospace", size: 9 },
+                        stepSize: 1,
+                    },
+                    border: { display: false },
+                    title: { display: false },
+                },
+                y1: {
+                    position: 'right',
+                    grid: { display: false },
+                    ticks: {
+                        color: 'rgba(168, 85, 247, 0.4)',
+                        font: { family: "'JetBrains Mono', monospace", size: 9 },
+                        callback: (v) => '$' + v.toFixed(2),
+                    },
+                    border: { display: false },
+                    title: { display: false },
+                }
+            }
+        }
+    });
+}
+
 async function refresh() {
     try {
         const data = await GetDashboard();
         renderDashboard(data);
+        try {
+            const hourly = await GetHourlyActivity();
+            renderActivityChart(hourly);
+        } catch (e) {
+            console.error('Failed to get hourly activity:', e);
+        }
     } catch (e) {
         console.error('Failed to get dashboard:', e);
         renderError(`Error: ${e.message || e}`);

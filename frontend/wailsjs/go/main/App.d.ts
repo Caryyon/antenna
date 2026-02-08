@@ -3,3 +3,5 @@
 import {main} from '../models';
 
 export function GetDashboard():Promise<main.DashboardData>;
+
+export function GetHourlyActivity():Promise<Array<main.HourlyBucket>>;

@@ -127,6 +127,14 @@ body {
     text-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
 }
 
+/* Activity Chart */
+.chart-container {
+    height: 140px;
+    padding: 8px 24px 4px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(0,255,136,0.01) 0%, transparent 100%);
+}
+
 /* Grid */
 .grid {
     flex: 1;

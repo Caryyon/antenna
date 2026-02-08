@@ -235,6 +235,70 @@ func parseKind(key string) string {
 	return "main"
 }
 
+// HourlyBucket represents activity in one hour
+type HourlyBucket struct {
+	Hour     string  `json:"hour"`     // "HH:00" format
+	Messages int     `json:"messages"`
+	Cost     float64 `json:"cost"`
+}
+
+// GetHourlyActivity returns message counts and costs bucketed by hour for the last 24h
+func (a *App) GetHourlyActivity() []HourlyBucket {
+	now := time.Now()
+	cutoff := now.Add(-24 * time.Hour)
+
+	// Initialize 24 buckets
+	buckets := make([]HourlyBucket, 24)
+	for i := 0; i < 24; i++ {
+		t := cutoff.Add(time.Duration(i+1) * time.Hour)
+		buckets[i] = HourlyBucket{Hour: t.Format("15:00")}
+	}
+
+	sessionsDir := filepath.Join(a.openclawDir, "agents", "main", "sessions")
+	files, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		return buckets
+	}
+
+	for _, f := range files {
+		if !strings.HasSuffix(f.Name(), ".jsonl") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(sessionsDir, f.Name()))
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			if line == "" {
+				continue
+			}
+			var entry transcriptEntry
+			if err := json.Unmarshal([]byte(line), &entry); err != nil {
+				continue
+			}
+			if entry.Type != "message" || entry.Message == nil || entry.Message.Timestamp <= 0 {
+				continue
+			}
+			msgTime := time.UnixMilli(entry.Message.Timestamp)
+			if msgTime.Before(cutoff) || msgTime.After(now) {
+				continue
+			}
+			// Find bucket index
+			hoursSinceCutoff := msgTime.Sub(cutoff).Hours()
+			idx := int(hoursSinceCutoff)
+			if idx >= 24 {
+				idx = 23
+			}
+			buckets[idx].Messages++
+			if entry.Message.Usage != nil && entry.Message.Usage.Cost != nil {
+				buckets[idx].Cost += entry.Message.Usage.Cost.Total
+			}
+		}
+	}
+
+	return buckets
+}
+
 func (a *App) parseSessionCost(sessionID string, s *Session, today time.Time) {
 	path := filepath.Join(a.openclawDir, "agents", "main", "sessions", sessionID+".jsonl")
 	data, err := os.ReadFile(path)
