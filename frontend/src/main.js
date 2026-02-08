@@ -19,14 +19,78 @@ function renderError(message) {
     `;
 }
 
-function renderDashboard(data) {
-    // Destroy chart before replacing DOM
-    if (activityChart) {
-        activityChart.destroy();
-        activityChart = null;
+let dashboardInitialized = false;
+
+function updateDashboardValues(data) {
+    const sessions = data.sessions || [];
+    const active = sessions.filter(s => s.kind === 'main' && s.isActive);
+    const idle = sessions.filter(s => s.kind === 'main' && !s.isActive);
+    const subs = sessions.filter(s => s.kind === 'subagent');
+    const crons = sessions.filter(s => s.kind === 'cron');
+
+    // Update stat values
+    const updates = {
+        'stat-total-count': data.totalCount || 0,
+        'stat-active-count': active.length,
+        'stat-sub-count': subs.length,
+        'stat-cron-count': crons.length,
+        'stat-today-cost': formatCost(data.todayCost),
+        'stat-total-cost': formatCost(data.totalCost),
+    };
+    for (const [id, val] of Object.entries(updates)) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
     }
+
+    // Update session rows
+    const renderRows = (items, dim) => items.map(s => `
+        <div class="row${dim ? ' dim' : ''}">
+            <span class="session-name">${s.name || 'unnamed'}</span>
+            <span class="session-id">${s.sessionId || ''}</span>
+            ${!dim ? `<span class="model">${s.model || ''}</span>` : ''}
+            <span class="msgs">${s.messageCount || 0}</span>
+            ${!dim ? `<span class="cost green">${formatCost(s.todayCost)}</span>` : ''}
+            <span class="cost">${formatCost(s.totalCost)}</span>
+        </div>
+    `).join('');
+
+    const renderCards = (items) => items.length > 0 ? items.map(s => `
+        <div class="card">
+            <div class="card-header">
+                <span class="card-name">${s.name || 'unnamed'}</span>
+                ${s.isActive ? '<span class="live-dot small"></span>' : ''}
+            </div>
+            <div class="card-meta">
+                <span>${s.messageCount || 0} msgs</span>
+                <span>${formatCost(s.totalCost)}</span>
+            </div>
+        </div>
+    `).join('') : '<div class="empty">None</div>';
+
+    const el = (id) => document.getElementById(id);
+    if (el('active-rows')) el('active-rows').innerHTML = renderRows(active, false);
+    if (el('idle-rows')) el('idle-rows').innerHTML = renderRows(idle, true);
+    if (el('idle-count')) el('idle-count').textContent = idle.length;
+    if (el('sub-rows')) el('sub-rows').innerHTML = renderCards(subs);
+    if (el('sub-count')) el('sub-count').textContent = subs.length;
+    if (el('cron-rows')) el('cron-rows').innerHTML = renderCards(crons);
+    if (el('cron-count')) el('cron-count').textContent = crons.length;
+
+    // Show/hide active section
+    const activeSec = el('active-section');
+    if (activeSec) activeSec.style.display = active.length > 0 ? '' : 'none';
+}
+
+function renderDashboard(data) {
     if (!data || !data.sessions) {
         renderError('No data received from backend');
+        dashboardInitialized = false;
+        return;
+    }
+
+    // On subsequent polls, just update values — don't rebuild DOM
+    if (dashboardInitialized) {
+        updateDashboardValues(data);
         return;
     }
 
@@ -59,32 +123,32 @@ function renderDashboard(data) {
                     <span class="label">Live</span>
                 </div>
                 <div class="stat-group">
-                    <span class="stat-value big">${data.totalCount || 0}</span>
+                    <span class="stat-value big" id="stat-total-count">${data.totalCount || 0}</span>
                     <span class="label">sessions</span>
                 </div>
                 <div class="stat-group">
                     <span class="dot green"></span>
-                    <span class="stat-value green">${active.length}</span>
+                    <span class="stat-value green" id="stat-active-count">${active.length}</span>
                     <span class="label">active</span>
                 </div>
                 <div class="stat-group">
                     <span class="dot purple"></span>
-                    <span class="stat-value purple">${subs.length}</span>
+                    <span class="stat-value purple" id="stat-sub-count">${subs.length}</span>
                     <span class="label">sub</span>
                 </div>
                 <div class="stat-group">
                     <span class="dot orange"></span>
-                    <span class="stat-value orange">${crons.length}</span>
+                    <span class="stat-value orange" id="stat-cron-count">${crons.length}</span>
                     <span class="label">cron</span>
                 </div>
                 <div class="spacer"></div>
                 <div class="cost-group">
                     <div class="cost-label">Today</div>
-                    <div class="cost-value green">${formatCost(data.todayCost)}</div>
+                    <div class="cost-value green" id="stat-today-cost">${formatCost(data.todayCost)}</div>
                 </div>
                 <div class="cost-group">
                     <div class="cost-label">Total</div>
-                    <div class="cost-value">${formatCost(data.totalCost)}</div>
+                    <div class="cost-value" id="stat-total-cost">${formatCost(data.totalCost)}</div>
                 </div>
             </div>
 
@@ -97,13 +161,12 @@ function renderDashboard(data) {
             <div class="grid">
                 <!-- Left Panel -->
                 <div class="left-panel">
-                    ${active.length > 0 ? `
-                    <div class="section active-section">
+                    <div class="section active-section" id="active-section" style="${active.length > 0 ? '' : 'display:none'}">
                         <div class="section-header">
                             <span class="live-dot small"></span>
                             <span class="section-title green">Active</span>
                         </div>
-                        <div class="rows">
+                        <div class="rows" id="active-rows">
                             ${active.map(s => `
                             <div class="row">
                                 <span class="session-name">${s.name || 'unnamed'}</span>
@@ -116,15 +179,14 @@ function renderDashboard(data) {
                             `).join('')}
                         </div>
                     </div>
-                    ` : ''}
                     
                     <div class="section idle-section">
                         <div class="section-header">
                             <span class="idle-dot"></span>
                             <span class="section-title gray">Idle</span>
-                            <span class="count">${idle.length}</span>
+                            <span class="count" id="idle-count">${idle.length}</span>
                         </div>
-                        <div class="rows scrollable">
+                        <div class="rows scrollable" id="idle-rows">
                             ${idle.map(s => `
                             <div class="row dim">
                                 <span class="session-name">${s.name || 'unnamed'}</span>
@@ -143,9 +205,9 @@ function renderDashboard(data) {
                         <div class="section-header">
                             <span class="icon">⚡</span>
                             <span class="section-title purple">Sub-agents</span>
-                            <span class="count purple">${subs.length}</span>
+                            <span class="count purple" id="sub-count">${subs.length}</span>
                         </div>
-                        <div class="rows scrollable">
+                        <div class="rows scrollable" id="sub-rows">
                             ${subs.length > 0 ? subs.map(s => `
                             <div class="card">
                                 <div class="card-header">
@@ -157,7 +219,7 @@ function renderDashboard(data) {
                                     <span>${formatCost(s.totalCost)}</span>
                                 </div>
                             </div>
-                            `).join('') : '<div class="empty">No sub-agents</div>'}
+                            `).join('') : '<div class="empty">None</div>'}
                         </div>
                     </div>
 
@@ -165,9 +227,9 @@ function renderDashboard(data) {
                         <div class="section-header">
                             <span class="icon">⏱</span>
                             <span class="section-title orange">Cron</span>
-                            <span class="count orange">${crons.length}</span>
+                            <span class="count orange" id="cron-count">${crons.length}</span>
                         </div>
-                        <div class="rows scrollable">
+                        <div class="rows scrollable" id="cron-rows">
                             ${crons.length > 0 ? crons.map(s => `
                             <div class="card">
                                 <div class="card-header">
@@ -179,13 +241,15 @@ function renderDashboard(data) {
                                     <span>${formatCost(s.totalCost)}</span>
                                 </div>
                             </div>
-                            `).join('') : '<div class="empty">No cron jobs</div>'}
+                            `).join('') : '<div class="empty">None</div>'}
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     `;
+
+    dashboardInitialized = true;
 }
 
 let activityChart = null;
